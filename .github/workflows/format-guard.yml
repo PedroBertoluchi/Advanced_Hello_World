@@ -1,0 +1,35 @@
+name: Formatting equivalence
+on:
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  format-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test the formatting guard
+        run: dotnet run --project .github/FormatGuard -- --self-test
+      - name: Compare every modified CSharp file
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: dotnet run --project .github/FormatGuard --no-build -- "$BASE" "$HEAD"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            7.0.x
+      - name: Build the solution
+        run: dotnet build Advanced_Hello_World/Advanced_Hello_World.sln --configuration Release --nologo
+      - name: Run the existing unit tests
+        run: dotnet test HelloWorldTest/HelloWorldTest.csproj --configuration Release --no-build --nologo
