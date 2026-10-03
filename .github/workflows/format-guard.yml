@@ -20,10 +20,17 @@ jobs:
       - name: Test the formatting guard
         run: dotnet run --project .github/FormatGuard -- --self-test
       - name: Compare every modified CSharp file
+        if: startsWith(github.head_ref, 'deepsource-transform-')
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: dotnet run --project .github/FormatGuard --no-build -- "$BASE" "$HEAD"
+      - name: Check CSharp syntax for a functional PR
+        if: "!startsWith(github.head_ref, 'deepsource-transform-')"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: dotnet run --project .github/FormatGuard --no-build -- --syntax "$BASE" "$HEAD"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |

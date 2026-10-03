@@ -23,12 +23,14 @@ if (args.Length == 1 && args[0] == "--self-test")
     }
     return 0;
 }
-if (args.Length != 2)
+var syntaxOnly = args.Length == 3 && args[0] == "--syntax";
+var refs = syntaxOnly ? args.Skip(1).ToArray() : args;
+if (refs.Length != 2)
 {
-    Console.Error.WriteLine("Usage: FormatGuard <base-ref> <head-ref> | --self-test");
+    Console.Error.WriteLine("Usage: FormatGuard [--syntax] <base-ref> <head-ref> | --self-test");
     return 2;
 }
-var entries = Git("diff", "--name-status", "--no-renames", args[0], args[1])
+var entries = Git("diff", "--name-status", "--no-renames", refs[0], refs[1])
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 var checkedFiles = 0;
 var failures = 0;
@@ -36,6 +38,19 @@ foreach (var entry in entries)
 {
     var fields = entry.TrimEnd('\r').Split('\t');
     var path = fields[^1];
+    if (syntaxOnly)
+    {
+        if (fields[0] == "D" || !path.EndsWith(".cs", StringComparison.Ordinal))
+            continue;
+        checkedFiles++;
+        if (CSharpSyntaxTree.ParseText(Git("show", $"{refs[1]}:{path}"))
+            .GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error))
+        {
+            Console.Error.WriteLine($"CSharp syntax error: {path}");
+            failures++;
+        }
+        continue;
+    }
     if (path is ".github/workflows/format-guard.yml" or ".github/FormatGuard/FormatGuard.csproj" or ".github/FormatGuard/Program.cs" or ".github/FormatGuard/.gitignore")
         continue;
     if (fields[0] != "M" || !path.EndsWith(".cs", StringComparison.Ordinal))
@@ -44,8 +59,8 @@ foreach (var entry in entries)
         failures++;
         continue;
     }
-    var before = Git("show", $"{args[0]}:{path}");
-    var after = Git("show", $"{args[1]}:{path}");
+    var before = Git("show", $"{refs[0]}:{path}");
+    var after = Git("show", $"{refs[1]}:{path}");
     checkedFiles++;
     if (!Equivalent(before, after))
     {
@@ -53,7 +68,7 @@ foreach (var entry in entries)
         failures++;
     }
 }
-if (checkedFiles == 0)
+if (checkedFiles == 0 && !syntaxOnly)
 {
     Console.Error.WriteLine("No modified C# files were checked.");
     return 1;
